@@ -26,5 +26,6 @@ COPY bot.py .
 # فتح المنافذ الافتراضية داخل الحاوية
 EXPOSE 8081 8080
 
-# أمر التشغيل النهائي المستقر
-CMD ["sh", "-c", "telegram-bot-api & python3 bot.py"]
+# كسر احتكار الحاوية وصناعة أمر إقلاع إجباري مخصص لتشغيل السيرفر والبوت معاً
+ENTRYPOINT []
+CMD ["sh", "-c", "/usr/local/bin/telegram-bot-api --local --api-id=25571618 --api-hash=0fb4c207a9ee083e9df259fa87309536 & sleep 3 && python3 /app/bot.py"]
