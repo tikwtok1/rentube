@@ -1,13 +1,18 @@
 # استخدام حاوية سيرفر تليجرام المحلي الجاهزة والمبنية رسمياً
 FROM aiogram/telegram-bot-api:latest
 
-# تثبيت البايثون، الفايرفوكس المساعد للدمج (FFmpeg) و Node.js لتخطي قيود يوتيوب
+# تثبيت البايثون، والـ FFmpeg المساعد للدمج و Node.js لتخطي قيود يوتيوب
 RUN apk add --no-cache \
     python3 \
     py3-pip \
     ffmpeg \
     nodejs \
     bash
+
+# إجبار الحاوية على قراءة معرفات التطبيق كمتغيرات بيئة إجبارية قبل التشغيل
+ENV TELEGRAM_API_ID=25571618
+ENV TELEGRAM_API_HASH=0fb4c207a9ee083e9df259fa87309536
+ENV TELEGRAM_LOCAL_MODE=true
 
 WORKDIR /app
 
@@ -21,5 +26,5 @@ COPY bot.py .
 # فتح المنافذ الافتراضية داخل الحاوية
 EXPOSE 8081 8080
 
-# أمر التشغيل الثنائي: تشغيل سيرفر تليجرام المحلي، ثم تشغيل كود البوت فوراً
-CMD telegram-bot-api --local --api-id=25571618 --api-hash=0fb4c207a9ee083e9df259fa87309536 & python3 bot.py
+# أمر التشغيل النهائي المستقر
+CMD ["sh", "-c", "telegram-bot-api & python3 bot.py"]
