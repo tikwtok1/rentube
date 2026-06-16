@@ -7,10 +7,8 @@ from telegram.ext import Application, CommandHandler, MessageHandler, filters, C
 import yt_dlp
 import httpx
 
-# توكن البوت الخاص بك
 TOKEN = "8868474021:AAFuT8wnMxq8EdC9keC4o19uMLa2C5e3BQg"
 
-# سيرفر خفيف لـ Render لضمان بقاء البوت حياً
 class HealthCheckHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
@@ -34,7 +32,7 @@ def fix_channel_url(url):
 
 def get_channel_videos_list(channel_url):
     fixed_url = fix_channel_url(channel_url)
-    ydl_opts = {'extract_flat': True, 'skip_download': True, 'quiet': True, 'no_warnings': True, 'ignoreerrors': True}
+    ydl_opts = {'extract_flat': True, 'quiet': True, 'no_warnings': True, 'ignoreerrors': True}
     video_entries = []
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         try:
@@ -53,14 +51,16 @@ def get_channel_videos_list(channel_url):
             return None, str(e)
 
 def download_single_video(video_id):
-    # استخدام رابط يوتيوب رسمي ومباشر لتجنب أخطاء التحميل
+    # الحل الجذري: روابط يوتيوب رسمية + تخطي حظر السيرفرات السحابية
     video_url = f"https://www.youtube.com/watch?v={video_id}"
     ydl_opts = {
-        'format': 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best',
+        'format': 'best[ext=mp4]/best', # تحميل أفضل جودة مدمجة مباشرة لتخفيف الضغط على سيرفر Render المجاني
         'outtmpl': f'%(id)s.%(ext)s',
         'quiet': True,
         'no_warnings': True,
-        'merge_output_format': 'mp4'
+        'nocheckcertificate': True,
+        'geo_bypass': True,
+        'extractor_args': {'youtube': {'player_client': ['web', 'android']}}
     }
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         try:
@@ -70,7 +70,6 @@ def download_single_video(video_id):
             print(f"Error downloading {video_id}: {e}")
             return None
 
-# دالة رفع الملفات الكبيرة خارجياً لتوفير روابط مباشرة حتى 200MB 
 async def upload_to_catbox(file_path):
     if not os.path.exists(file_path): return None
     url = "https://catbox.moe/user/api.php"
@@ -88,24 +87,21 @@ async def upload_to_catbox(file_path):
     return None
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("👋 أهلاً بك! البوت يعمل الآن بأعلى جودة وبأسهل طريقة. أرسل رابط قناة يوتيوب للبدء.")
+    await update.message.reply_text("👋 البوت جاهز. أرسل رابط قناة يوتيوب للبدء.")
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     url = update.message.text.strip()
-    if "youtube.com" not in url and "youtu.be" not in url and not url.startswith('@'):
-        await update.message.reply_text("⚠️ من فضلك أرسل رابط قناة صحيح.")
-        return
     
-    await update.message.reply_text("🔄 جاري جلب الفيديوهات بأعلى جودة متوفرة...")
+    await update.message.reply_text("🔄 جاري جلب الفيديوهات...")
     loop = asyncio.get_event_loop()
     video_entries, channel_name = await loop.run_in_executor(None, get_channel_videos_list, url)
 
     if not video_entries:
-        await update.message.reply_text("❌ تعذر جلب الفيديوهات. تأكد من أن الرابط صحيح أو أن القناة ليست فارغة.")
+        await update.message.reply_text("❌ تعذر جلب الفيديوهات. تأكد من صحة الرابط.")
         return
 
     total_videos = len(video_entries)
-    await update.message.reply_text(f"📊 القناة: {channel_name}\n🎥 العدد: {total_videos}\n⏳ بدأ السحب التلقائي وإنشاء الروابط المباشرة عالية الجودة...")
+    await update.message.reply_text(f"📊 القناة: {channel_name}\n🎥 العدد: {total_videos}\n⏳ بدأ السحب والرفع...")
 
     for idx, entry in enumerate(video_entries, start=1):
         video_id = entry['id']
@@ -115,20 +111,19 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         file_path = await loop.run_in_executor(None, download_single_video, video_id)
         
         if file_path and os.path.exists(file_path):
-            await progress_msg.edit_text(f"📤 جاري توليد الرابط المباشر بجودة خارقة...")
+            await progress_msg.edit_text(f"📤 تم التحميل.. جاري توليد الرابط المباشر...")
             download_url = await upload_to_catbox(file_path)
             
             if download_url:
                 await update.message.reply_text(
                     f"🎬 **فيديو رقم {idx} من {total_videos}**\n\n"
                     f"📌 **العنوان:** {video_title}\n"
-                    f"🚀 **رابط المشاهدة والتحميل المباشر:**\n{download_url}"
+                    f"🚀 **الرابط المباشر:**\n{download_url}"
                 )
                 await progress_msg.delete()
             else:
-                await progress_msg.edit_text(f"⚠️ فشل رفع الفيديو رقم {idx} خارجياً (قد يكون حجم الفيديو كبيراً جداً).")
+                await progress_msg.edit_text(f"⚠️ فشل الرفع للفيديو رقم {idx}. قد يكون حجمه تجاوز 200MB.")
             
-            # مسح الملف بعد الانتهاء لتوفير المساحة
             os.remove(file_path)
         else:
             await progress_msg.edit_text(f"❌ تعذر تحميل الفيديو رقم {idx} من يوتيوب.")
