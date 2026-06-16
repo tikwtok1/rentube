@@ -116,7 +116,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             download_url = await upload_to_catbox(file_path)
             
             if download_url:
-                await query_or_msg = update.message.reply_text(
+                await update.message.reply_text(
                     f"🎬 **فيديو رقم {idx} من {total_videos}**\n\n"
                     f"📌 **العنوان:** {video_title}\n"
                     f"🚀 **رابط المشاهدة والتحميل المباشر (أعلى جودة):**\n{download_url}"
