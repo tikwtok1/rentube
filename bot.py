@@ -2,8 +2,8 @@ import os
 import asyncio
 from http.server import BaseHTTPRequestHandler, HTTPServer
 import threading
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, filters, ContextTypes
+from telegram import Update
+from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 import yt_dlp
 import httpx
 
@@ -53,6 +53,7 @@ def get_channel_videos_list(channel_url):
             return None, str(e)
 
 def download_single_video(video_id):
+    # استخدام رابط يوتيوب رسمي ومباشر لتجنب أخطاء التحميل
     video_url = f"https://www.youtube.com/watch?v={video_id}"
     ydl_opts = {
         'format': 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best',
@@ -65,10 +66,11 @@ def download_single_video(video_id):
         try:
             info = ydl.extract_info(video_url, download=True)
             return ydl.prepare_filename(info)
-        except:
+        except Exception as e:
+            print(f"Error downloading {video_id}: {e}")
             return None
 
-# دالة رفع الملفات الكبيرة خارجياً لتوفير روابط مباشرة حتى 2GB دون قيود تليجرام
+# دالة رفع الملفات الكبيرة خارجياً لتوفير روابط مباشرة حتى 200MB 
 async def upload_to_catbox(file_path):
     if not os.path.exists(file_path): return None
     url = "https://catbox.moe/user/api.php"
@@ -80,16 +82,17 @@ async def upload_to_catbox(file_path):
                 response = await client.post(url, data=data, files=files)
                 if response.status_code == 200 and "https://" in response.text:
                     return response.text.strip()
-        except:
+        except Exception as e:
+            print(f"Upload error: {e}")
             return None
     return None
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("👋 أهلاً بك! البوت يعمل الآن بأعلى جودة وبأسهل طريقة دون تعقيدات السيرفر المحلي.")
+    await update.message.reply_text("👋 أهلاً بك! البوت يعمل الآن بأعلى جودة وبأسهل طريقة. أرسل رابط قناة يوتيوب للبدء.")
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     url = update.message.text.strip()
-    if "youtube.com" not in url and not url.startswith('@'):
+    if "youtube.com" not in url and "youtu.be" not in url and not url.startswith('@'):
         await update.message.reply_text("⚠️ من فضلك أرسل رابط قناة صحيح.")
         return
     
@@ -98,7 +101,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     video_entries, channel_name = await loop.run_in_executor(None, get_channel_videos_list, url)
 
     if not video_entries:
-        await update.message.reply_text("❌ تعذر جلب الفيديوهات.")
+        await update.message.reply_text("❌ تعذر جلب الفيديوهات. تأكد من أن الرابط صحيح أو أن القناة ليست فارغة.")
         return
 
     total_videos = len(video_entries)
@@ -119,15 +122,16 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await update.message.reply_text(
                     f"🎬 **فيديو رقم {idx} من {total_videos}**\n\n"
                     f"📌 **العنوان:** {video_title}\n"
-                    f"🚀 **رابط المشاهدة والتحميل المباشر (أعلى جودة):**\n{download_url}"
+                    f"🚀 **رابط المشاهدة والتحميل المباشر:**\n{download_url}"
                 )
                 await progress_msg.delete()
             else:
-                await progress_msg.edit_text(f"⚠️ فشل رفع الفيديو رقم {idx} خارجياً.")
+                await progress_msg.edit_text(f"⚠️ فشل رفع الفيديو رقم {idx} خارجياً (قد يكون حجم الفيديو كبيراً جداً).")
             
+            # مسح الملف بعد الانتهاء لتوفير المساحة
             os.remove(file_path)
         else:
-            await progress_msg.edit_text(f"❌ تعذر تحميل الفيديو رقم {idx}")
+            await progress_msg.edit_text(f"❌ تعذر تحميل الفيديو رقم {idx} من يوتيوب.")
 
 def main():
     threading.Thread(target=run_health_server, daemon=True).start()
