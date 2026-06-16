@@ -1,32 +1,25 @@
-FROM ubuntu:22.04
+# استخدام حاوية سيرفر تليجرام المحلي الجاهزة والمبنية رسمياً
+FROM aiogram/telegram-bot-api:latest
 
-# منع الأسئلة التفاعلية أثناء التثبيت
-ENV DEBIAN_FRONTEND=noninteractive
-
-# تثبيت التحديثات والاعتمادات الأساسية (بايثون، ffmpeg، nodejs، وأدوات التحميل)
-RUN apt-get update && apt-get install -y \
+# تثبيت البايثون، الفايرفوكس المساعد للدمج (FFmpeg) و Node.js لتخطي قيود يوتيوب
+RUN apk add --no-cache \
     python3 \
-    python3-pip \
+    py3-pip \
     ffmpeg \
     nodejs \
-    curl \
-    wget \
-    ca-certificates \
-    && rm -rf /var/lib/apt/lists/*
-
-# تحميل النسخة الرسمية المبنية مسبقاً من Telegram Bot API لأجهزة الـ x86_64
-# (نقوم بوضعه في المسار /usr/local/bin ليعمل كأمر مباشر في النظام)
-RUN wget -O /usr/local/bin/telegram-bot-api https://github.com/tdlib/telegram-bot-api/releases/latest/download/telegram-bot-api-linux-amd64 \
-    && chmod +x /usr/local/bin/telegram-bot-api
+    bash
 
 WORKDIR /app
 
-# نسخ ملف المتطلبات وتثبيت مكتبات بايثون
+# نسخ ملف الاعتمادات وتثبيت مكتبات البايثون داخل النظام
 COPY requirements.txt .
-RUN pip3 install --no-cache-dir -r requirements.txt
+RUN pip3 install --no-cache-dir --break-system-packages -r requirements.txt
 
-# نسخ كود البوت
+# نسخ ملف البوت الخاص بك
 COPY bot.py .
 
-# أمر التشغيل المزدوج (السيرفر المحلي في الخلفية + البوت)
+# فتح المنافذ الافتراضية داخل الحاوية
+EXPOSE 8081 8080
+
+# أمر التشغيل الثنائي: تشغيل سيرفر تليجرام المحلي، ثم تشغيل كود البوت فوراً
 CMD telegram-bot-api --local --api-id=25571618 --api-hash=0fb4c207a9ee083e9df259fa87309536 & python3 bot.py
